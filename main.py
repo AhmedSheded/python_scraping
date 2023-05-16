@@ -2,13 +2,31 @@ import requests
 from bs4 import BeautifulSoup
 import csv
 import os
+from datetime import date, timedelta
+import pandas as pd
 
-date = input('Please enter a Date in the following format MM/DD/YYYY: ')
-link = f'https://www.yallakora.com/match-center/?date={date}'
-page = requests.get(link)
+def daterange(start_date, end_date):
+    for n in range(int((end_date - start_date).days)):
+        yield start_date + timedelta(n)
+
+start_date= input('Enter a start date formatted as YYYY/MM/DD: ')
+start_year, start_month, start_day = start_date.split('/')
+
+end_date= input('Enter an end date formatted as YYYY/MM/DD: ')
+end_year, end_month, end_day = end_date.split('/')
+
+start_date = date(int(start_year), int(start_month), int(start_day))
+end_date = date(int(end_year), int(end_month), int(end_day))
+
+dir_path = os.path.join(os.path.abspath(''), 'matches details')
 
 
-def main(page):
+
+
+def main(date):
+    link = f'https://www.yallakora.com/match-center/?date={date}'
+    page = requests.get(link)
+
     src = page.content # byte code
     soup = BeautifulSoup(src, 'lxml') # parse to html code
     matches_details = []
@@ -35,11 +53,12 @@ def main(page):
 
                 # add match info to matches_details
                 match = {
-                    'نوع البطولة': championship_title,
-                    'الفريق الأول': team_a,
-                    'الفريق الثاني': team_b,
-                    'النتيجة': score,
-                    'ميعاد المبارة': time
+                    'Championship': championship_title,
+                    'Team A': team_a,
+                    'Team B': team_b,
+                    'Score': score,
+                    'Time': time,
+                    'Date': date
                 }
 
                 matches_details.append(match)
@@ -48,7 +67,7 @@ def main(page):
 
     get_match_info(championships)
     keys = matches_details[0].keys()
-    dir_path = os.path.join(os.path.abspath(''), 'matches details')
+
 
     if not os.path.exists(dir_path): os.makedirs(dir_path)
 
@@ -56,11 +75,24 @@ def main(page):
         dict_writer = csv.DictWriter(output, keys)
         dict_writer.writeheader()
         dict_writer.writerows(matches_details)
-        print('file created')
+        print(f'file created for {date}')
 
 
-try:
-    main(page)
-except IndexError:
-    print('No matches for this day')
+for single_date in daterange(start_date, end_date):
+    try:
+        main(single_date.strftime('%m/%d/%Y'))
+
+    except IndexError:
+        print('No matches for this day')
+
+merge= input('do you want to merge files y/n: ')
+
+if merge =='y' or merge == 'Y':
+    files = os.listdir(dir_path)
+    df = pd.DataFrame()
+    for file in files:
+        data = pd.read_csv(os.path.join(dir_path, file))
+        df = pd.concat([df, data], axis=0)
+        os.remove(os.path.join(dir_path, file))
+    df.to_csv(os.path.join(dir_path, f'matches_details_from_{start_date} to {end_date}.csv'), index=False)
 
